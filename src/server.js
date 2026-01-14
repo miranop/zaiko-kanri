@@ -86,14 +86,35 @@ app.get('/api/products/:id', (req, res) => {
 app.post('/api/products', (req, res) => {
   const { name, sku, description, quantity, min_quantity, price, category } = req.body;
   
-  if (!name) {
+  // Validate required fields
+  if (!name || typeof name !== 'string' || name.trim() === '') {
     res.status(400).json({ error: 'Product name is required' });
+    return;
+  }
+
+  // Validate numeric fields
+  const parsedQuantity = quantity !== undefined ? parseInt(quantity) : 0;
+  const parsedMinQuantity = min_quantity !== undefined ? parseInt(min_quantity) : 0;
+  const parsedPrice = price !== undefined ? parseFloat(price) : 0;
+
+  if (isNaN(parsedQuantity) || parsedQuantity < 0) {
+    res.status(400).json({ error: 'Quantity must be a non-negative number' });
+    return;
+  }
+
+  if (isNaN(parsedMinQuantity) || parsedMinQuantity < 0) {
+    res.status(400).json({ error: 'Minimum quantity must be a non-negative number' });
+    return;
+  }
+
+  if (isNaN(parsedPrice) || parsedPrice < 0) {
+    res.status(400).json({ error: 'Price must be a non-negative number' });
     return;
   }
 
   const sql = `INSERT INTO products (name, sku, description, quantity, min_quantity, price, category)
                VALUES (?, ?, ?, ?, ?, ?, ?)`;
-  const params = [name, sku, description, quantity || 0, min_quantity || 0, price || 0, category];
+  const params = [name.trim(), sku, description, parsedQuantity, parsedMinQuantity, parsedPrice, category];
 
   db.run(sql, params, function(err) {
     if (err) {
@@ -102,7 +123,16 @@ app.post('/api/products', (req, res) => {
     }
     res.json({
       message: 'Product created successfully',
-      product: { id: this.lastID, ...req.body }
+      product: {
+        id: this.lastID,
+        name: name.trim(),
+        sku,
+        description,
+        quantity: parsedQuantity,
+        min_quantity: parsedMinQuantity,
+        price: parsedPrice,
+        category
+      }
     });
   });
 });
@@ -112,11 +142,37 @@ app.put('/api/products/:id', (req, res) => {
   const { id } = req.params;
   const { name, sku, description, quantity, min_quantity, price, category } = req.body;
 
+  // Validate required fields
+  if (!name || typeof name !== 'string' || name.trim() === '') {
+    res.status(400).json({ error: 'Product name is required' });
+    return;
+  }
+
+  // Validate numeric fields
+  const parsedQuantity = quantity !== undefined ? parseInt(quantity) : 0;
+  const parsedMinQuantity = min_quantity !== undefined ? parseInt(min_quantity) : 0;
+  const parsedPrice = price !== undefined ? parseFloat(price) : 0;
+
+  if (isNaN(parsedQuantity) || parsedQuantity < 0) {
+    res.status(400).json({ error: 'Quantity must be a non-negative number' });
+    return;
+  }
+
+  if (isNaN(parsedMinQuantity) || parsedMinQuantity < 0) {
+    res.status(400).json({ error: 'Minimum quantity must be a non-negative number' });
+    return;
+  }
+
+  if (isNaN(parsedPrice) || parsedPrice < 0) {
+    res.status(400).json({ error: 'Price must be a non-negative number' });
+    return;
+  }
+
   const sql = `UPDATE products 
                SET name = ?, sku = ?, description = ?, quantity = ?, 
                    min_quantity = ?, price = ?, category = ?, updated_at = CURRENT_TIMESTAMP
                WHERE id = ?`;
-  const params = [name, sku, description, quantity, min_quantity, price, category, id];
+  const params = [name.trim(), sku, description, parsedQuantity, parsedMinQuantity, parsedPrice, category, id];
 
   db.run(sql, params, function(err) {
     if (err) {
