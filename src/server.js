@@ -55,6 +55,17 @@ app.get('/api/products', (req, res) => {
   });
 });
 
+// Get low stock products (must be before generic /:id route)
+app.get('/api/products/alerts/low-stock', (req, res) => {
+  db.all('SELECT * FROM products WHERE quantity <= min_quantity ORDER BY quantity', [], (err, rows) => {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
+    }
+    res.json({ products: rows });
+  });
+});
+
 // Get single product
 app.get('/api/products/:id', (req, res) => {
   const { id } = req.params;
@@ -146,31 +157,34 @@ app.patch('/api/products/:id/quantity', (req, res) => {
     return;
   }
 
-  const sql = `UPDATE products 
-               SET quantity = quantity + ?, updated_at = CURRENT_TIMESTAMP
-               WHERE id = ?`;
-
-  db.run(sql, [adjustment, id], function(err) {
+  // First, get current quantity to validate the adjustment won't result in negative inventory
+  db.get('SELECT quantity FROM products WHERE id = ?', [id], (err, row) => {
     if (err) {
       res.status(500).json({ error: err.message });
       return;
     }
-    if (this.changes === 0) {
+    if (!row) {
       res.status(404).json({ error: 'Product not found' });
       return;
     }
-    res.json({ message: 'Quantity updated successfully' });
-  });
-});
 
-// Get low stock products
-app.get('/api/products/alerts/low-stock', (req, res) => {
-  db.all('SELECT * FROM products WHERE quantity <= min_quantity ORDER BY quantity', [], (err, rows) => {
-    if (err) {
-      res.status(500).json({ error: err.message });
+    const newQuantity = row.quantity + adjustment;
+    if (newQuantity < 0) {
+      res.status(400).json({ error: 'Adjustment would result in negative inventory' });
       return;
     }
-    res.json({ products: rows });
+
+    const sql = `UPDATE products 
+                 SET quantity = quantity + ?, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?`;
+
+    db.run(sql, [adjustment, id], function(err) {
+      if (err) {
+        res.status(500).json({ error: err.message });
+        return;
+      }
+      res.json({ message: 'Quantity updated successfully' });
+    });
   });
 });
 
